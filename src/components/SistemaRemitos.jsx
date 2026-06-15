@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Printer, Mail, Plus, Trash2, Edit2, Save, Building2, User, Package, Upload, History, X, AlertCircle, MessageCircle } from 'lucide-react';
 import '../print.css';
+import {
+  getEmpresa, saveEmpresa,
+  getClientes, saveClienteIfNew,
+  getRemitos, saveRemito,
+  getUltimoNumeroRemito, saveUltimoNumeroRemito
+} from '../utils/db';
 
 const SistemaRemitos = () => {
   const [empresa, setEmpresa] = useState({
-    nombre: 'Agua Pura S.A.',
-    direccion: 'Av. Principal 1234',
-    telefono: '+54 11 1234-5678',
-    email: 'ventas@aguapura.com',
-    cuit: '20-12345678-9',
-    logo: ''
+    nombre: 'Agua Mar MR',
+    direccion: 'Soldado Maciel 114, Coronel Suárez',
+    telefono: '2926-495879',
+    email: 'aguamarmr@gmail.com',
+    cuit: '20-23632165-8',
+    logo: '/logo.png'
   });
 
   const [cliente, setCliente] = useState({
@@ -35,49 +41,48 @@ const SistemaRemitos = () => {
   const [clientesGuardados, setClientesGuardados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [mensajeExito, setMensajeExito] = useState('');
+  const [guardandoRemito, setGuardandoRemito] = useState(false);
+  const [estadoConexion, setEstadoConexion] = useState('verificando');
   const [busquedaCliente, setBusquedaCliente] = useState('');
 
   useEffect(() => {
     cargarDatos();
   }, []);
 
-  const cargarDatos = () => {
+  const cargarDatos = async () => {
     try {
-      const empresaData = localStorage.getItem('empresa-datos');
-      if (empresaData) {
-        setEmpresa(JSON.parse(empresaData));
-      }
+      const [empresaData, historialData, clientesData, ultimoNumero] = await Promise.all([
+        getEmpresa(),
+        getRemitos(),
+        getClientes(),
+        getUltimoNumeroRemito(),
+      ]);
 
-      const historialData = localStorage.getItem('historial-remitos');
-      if (historialData) {
-        setHistorialRemitos(JSON.parse(historialData));
-      }
+      if (empresaData) setEmpresa(empresaData);
+      if (historialData.length > 0) setHistorialRemitos(historialData);
+      if (clientesData.length > 0) setClientesGuardados(clientesData);
 
-      const clientesData = localStorage.getItem('clientes-guardados');
-      if (clientesData) {
-        setClientesGuardados(JSON.parse(clientesData));
-      }
-
-      const ultimoNumero = localStorage.getItem('ultimo-numero-remito');
-      if (ultimoNumero) {
-        const num = parseInt(ultimoNumero) + 1;
-        setNumeroRemito(`0001-${num.toString().padStart(8, '0')}`);
-      }
+      const num = ultimoNumero + 1;
+      setNumeroRemito(`0001-${num.toString().padStart(8, '0')}`);
+      setEstadoConexion('ok');
     } catch (error) {
-      console.log('Iniciando con datos por defecto:', error);
+      console.error('Error cargando datos:', error);
+      setEstadoConexion('error');
+      setError('❌ No se pudo conectar con la base de datos. Verificá Supabase y volvé a intentar.');
     } finally {
       setCargando(false);
     }
   };
 
-  const guardarEmpresa = () => {
+  const guardarEmpresa = async () => {
     try {
-      localStorage.setItem('empresa-datos', JSON.stringify(empresa));
+      await saveEmpresa(empresa);
       setEditandoEmpresa(false);
       alert('✅ Datos de empresa guardados correctamente');
     } catch (error) {
-      console.log('Error al guardar:', error);
-      alert('✅ Datos actualizados');
+      console.error('Error al guardar empresa:', error);
+      alert('❌ Error al guardar los datos de la empresa.');
     }
   };
 
@@ -97,7 +102,7 @@ const SistemaRemitos = () => {
   };
 
   const agregarProducto = () => {
-    if (nuevoProducto.cantidad > 0 && nuevoProducto.descripcion.trim()) {
+    if (nuevoProducto.cantidad > 0 && nuevoProducto.descripcion.trim() && nuevoProducto.precioUnitario >= 0) {
       setProductos([...productos, { ...nuevoProducto, id: Date.now() }]);
       setNuevoProducto({
         cantidad: 1,
@@ -105,8 +110,9 @@ const SistemaRemitos = () => {
         precioUnitario: 0
       });
       setError('');
+      setMensajeExito('');
     } else {
-      setError('⚠️ Por favor complete la cantidad y descripción del producto');
+      setError('⚠️ Revisá el producto: cantidad mayor a 0, descripción y precio válido.');
     }
   };
   
@@ -119,20 +125,27 @@ const SistemaRemitos = () => {
     return productos.reduce((sum, p) => sum + (p.cantidad * p.precioUnitario), 0);
   };
 
-  const guardarCliente = () => {
+  const guardarCliente = async () => {
     if (cliente.nombre && cliente.apellido) {
-      const clienteExiste = clientesGuardados.find(
-        c => c.nombre === cliente.nombre && c.apellido === cliente.apellido
-      );
-      
-      if (!clienteExiste) {
-        const nuevosClientes = [...clientesGuardados, cliente];
-        setClientesGuardados(nuevosClientes);
-        try {
-          localStorage.setItem('clientes-guardados', JSON.stringify(nuevosClientes));
-        } catch (error) {
-          console.log('Error al guardar cliente');
+      try {
+        const clienteNormalizado = {
+          nombre: cliente.nombre.trim(),
+          apellido: cliente.apellido.trim(),
+          direccion: cliente.direccion.trim(),
+          email: (cliente.email || '').trim(),
+          telefono: (cliente.telefono || '').trim(),
+        };
+
+        await saveClienteIfNew(clienteNormalizado);
+        // Actualizar lista local si no existía
+        const existe = clientesGuardados.find(
+          c => c.nombre === clienteNormalizado.nombre && c.apellido === clienteNormalizado.apellido
+        );
+        if (!existe) {
+          setClientesGuardados(prev => [...prev, clienteNormalizado]);
         }
+      } catch (error) {
+        console.error('Error al guardar cliente:', error);
       }
     }
   };
@@ -150,6 +163,13 @@ const SistemaRemitos = () => {
       setError('⚠️ Por favor ingrese la dirección del cliente');
       return false;
     }
+    if (cliente.email && cliente.email.trim()) {
+      const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cliente.email.trim());
+      if (!emailValido) {
+        setError('⚠️ El email del cliente no es válido');
+        return false;
+      }
+    }
     if (productos.length === 0) {
       setError('⚠️ Por favor agregue al menos un producto');
       return false;
@@ -157,40 +177,42 @@ const SistemaRemitos = () => {
     return true;
   };
 
-  const generarRemito = () => {
+  const generarRemito = async () => {
     setError('');
-    
+    setMensajeExito('');
+
     if (!validarDatos()) {
       return;
     }
 
     try {
-      guardarCliente();
+      setGuardandoRemito(true);
+      await guardarCliente();
 
       const nuevoRemito = {
         id: Date.now(),
         numero: numeroRemito,
         fecha: new Date().toISOString(),
-        cliente: {...cliente},
+        cliente: { ...cliente },
         productos: [...productos],
-        total: calcularTotal()
+        total: calcularTotal(),
       };
 
-      const nuevoHistorial = [nuevoRemito, ...historialRemitos];
-      setHistorialRemitos(nuevoHistorial);
-      
-      try {
-        localStorage.setItem('historial-remitos', JSON.stringify(nuevoHistorial));
-        const numActual = parseInt(numeroRemito.split('-')[1]);
-        localStorage.setItem('ultimo-numero-remito', numActual.toString());
-      } catch (error) {
-        console.log('Error al guardar en historial');
-      }
+      await saveRemito(nuevoRemito);
 
+      const numActual = parseInt(numeroRemito.split('-')[1]);
+      await saveUltimoNumeroRemito(numActual);
+
+      setHistorialRemitos(prev => [nuevoRemito, ...prev]);
+      setEstadoConexion('ok');
+      setMensajeExito('✅ Remito guardado en la nube correctamente.');
       setMostrarRemito(true);
     } catch (error) {
-      console.log('Error al generar remito:', error);
-      setError('❌ Error al generar el remito. Por favor intente nuevamente.');
+      console.error('Error al generar remito:', error);
+      setEstadoConexion('error');
+      setError('❌ Error al guardar el remito. Verificá la conexión a la base de datos.');
+    } finally {
+      setGuardandoRemito(false);
     }
   };
 
@@ -290,6 +312,7 @@ ${empresa.email}`;
     setCliente({ nombre: '', apellido: '', direccion: '', email: '', telefono: '' });
     setProductos([]);
     setError('');
+    setMensajeExito('');
     
     const numActual = parseInt(numeroRemito.split('-')[1]);
     setNumeroRemito(`0001-${(numActual + 1).toString().padStart(8, '0')}`);
@@ -353,7 +376,7 @@ ${empresa.email}`;
         `}</style>
 
         <div style={{ maxWidth: '1152px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
             <h1 style={{ fontSize: '36px', fontWeight: 'bold', color: '#1f2937', fontFamily: 'Playfair Display, serif' }}>
               Historial de Remitos por Cliente (A-Z)
             </h1>
@@ -652,7 +675,7 @@ ${empresa.email}`;
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #ddd6fe 100%)', padding: '48px 16px' }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #ddd6fe 100%)', padding: '32px 12px' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Work+Sans:wght@300;400;500;600&display=swap');
         
@@ -665,7 +688,7 @@ ${empresa.email}`;
       <div style={{ maxWidth: '1152px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
             <div></div>
             <button
               onClick={() => setMostrarHistorial(true)}
@@ -680,6 +703,9 @@ ${empresa.email}`;
           </h1>
           <p style={{ color: '#6b7280', fontSize: '18px' }}>Gestión de entregas de bidones de agua</p>
           <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '8px' }}>💾 Todos los datos se guardan automáticamente | 🖨️ Imprime o guarda como PDF</p>
+          <p style={{ color: estadoConexion === 'ok' ? '#047857' : estadoConexion === 'error' ? '#b91c1c' : '#6b7280', fontSize: '14px', marginTop: '8px', fontWeight: '600' }}>
+            {estadoConexion === 'ok' ? 'Conectado a Supabase' : estadoConexion === 'error' ? 'Sin conexión a Supabase' : 'Verificando conexión...'}
+          </p>
         </div>
 
         {/* Mensaje de Error */}
@@ -687,6 +713,12 @@ ${empresa.email}`;
           <div style={{ background: '#fef2f2', border: '2px solid #fecaca', borderRadius: '12px', padding: '16px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <AlertCircle style={{ color: '#dc2626' }} size={24} />
             <p style={{ color: '#991b1b', fontWeight: '500' }}>{error}</p>
+          </div>
+        )}
+
+        {mensajeExito && (
+          <div style={{ background: '#ecfdf5', border: '2px solid #86efac', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+            <p style={{ color: '#166534', fontWeight: '600' }}>{mensajeExito}</p>
           </div>
         )}
 
@@ -707,7 +739,7 @@ ${empresa.email}`;
           
           {editandoEmpresa ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Nombre</label>
                   <input
@@ -785,11 +817,11 @@ ${empresa.email}`;
             </div>
           ) : (
             <div style={{ background: 'linear-gradient(to right, #dbeafe, #e0e7ff)', padding: '24px', borderRadius: '12px', border: '2px solid #93c5fd' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
                 {empresa.logo && (
                   <img src={empresa.logo} alt="Logo" style={{ height: '96px', width: '96px', objectFit: 'contain', border: '2px solid #3b82f6', borderRadius: '8px', padding: '8px', background: 'white' }} />
                 )}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', flex: 1 }}>
                   <div>
                     <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Razón Social</p>
                     <p style={{ fontWeight: '600', color: '#1f2937', fontSize: '16px' }}>{empresa.nombre}</p>
@@ -813,7 +845,7 @@ ${empresa.email}`;
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '32px' }}>
           {/* Datos del Cliente */}
           <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.1)', padding: '32px', border: '1px solid #dbeafe' }}>
             <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#1f2937', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -958,7 +990,7 @@ ${empresa.email}`;
             <h2 style={{ fontSize: '24px', fontWeight: '600', color: '#1f2937', marginBottom: '24px' }}>Productos Agregados</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {productos.map((producto) => (
-                <div key={producto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, #dbeafe, #e0e7ff)', padding: '20px', borderRadius: '12px', border: '2px solid #93c5fd' }}>
+                <div key={producto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', background: 'linear-gradient(to right, #dbeafe, #e0e7ff)', padding: '20px', borderRadius: '12px', border: '2px solid #93c5fd' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontWeight: '600', color: '#1f2937', fontSize: '16px' }}>
                       {producto.cantidad} x {producto.descripcion}
@@ -979,16 +1011,17 @@ ${empresa.email}`;
 
             </div>
 
-            <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <div style={{ background: 'linear-gradient(to right, #2563eb, #4f46e5)', color: 'white', padding: '16px 32px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}>
                 <p style={{ fontSize: '14px', marginBottom: '4px' }}>Total</p>
                 <p style={{ fontSize: '30px', fontWeight: 'bold' }}>${calcularTotal().toFixed(2)}</p>
               </div>
               <button
                 onClick={generarRemito}
+                disabled={guardandoRemito}
                 style={{ padding: '16px 40px', background: 'linear-gradient(to right, #10b981, #059669)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)', fontSize: '16px', fontWeight: '600' }}
               >
-                Generar Remito
+                {guardandoRemito ? 'Guardando...' : 'Generar Remito'}
               </button>
             </div>
           </div>
