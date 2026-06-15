@@ -12,15 +12,11 @@ export const storage = {
    * @returns {Promise<{key: string, value: string}>}
    */
   async get(key) {
-    try {
-      const value = localStorage.getItem(key);
-      if (value === null) {
-        throw new Error(`Key "${key}" not found`);
-      }
-      return { key, value };
-    } catch (error) {
-      throw error;
+    const value = localStorage.getItem(key);
+    if (value === null) {
+      throw new Error(`Key "${key}" not found`);
     }
+    return { key, value };
   },
 
   /**

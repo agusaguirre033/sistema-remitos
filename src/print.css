@@ -1,59 +1,76 @@
 @media print {
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 portrait; margin: 0; }
+
   html, body, #root {
     margin: 0 !important;
     padding: 0 !important;
     height: auto !important;
+    width: 210mm !important;
+    background: white !important;
+    color: #171717 !important;
   }
 
-  /* Ocultar todo excepto el remito (usa display para no reservar espacio) */
-  body > :not(#remito-para-imprimir) {
+  .no-print,
+  .rv-topbar,
+  .rv-topbar-actions {
     display: none !important;
   }
 
-  /* Forzar el remito a ocupar el área imprimible de A4 */
-  #remito-para-imprimir {
-    position: fixed !important;
-    left: 0;
-    top: 0;
-    width: calc(210mm - 20mm) !important; /* 210mm A4 menos 2*10mm margin */
-    box-shadow: none !important;
-    transform: none !important;
-    border-radius: 0 !important;
+  .rv-page,
+  .rv-canvas {
+    display: block !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
+    min-height: auto !important;
+  }
+
+  #remito-para-imprimir {
+    box-sizing: border-box !important;
+    position: relative !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 12mm 14mm 11mm !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: white !important;
+    transform: none !important;
+    left: auto !important;
+    top: auto !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  /* Evitar saltos indeseados dentro de bloques importantes */
+  .rv-sheet,
   #remito-para-imprimir,
-  #remito-para-imprimir header,
-  #remito-para-imprimir .tabla-items,
-  #remito-para-imprimir footer {
+  #remito-para-imprimir section,
+  #remito-para-imprimir .rv-grid-2,
+  #remito-para-imprimir .rv-total-row {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* Evitar que las filas de la tabla se dividan entre páginas */
-  #remito-para-imprimir table tr,
-  #remito-para-imprimir table tbody tr,
-  #remito-para-imprimir table thead tr {
+  #remito-para-imprimir table,
+  #remito-para-imprimir thead,
+  #remito-para-imprimir tbody,
+  #remito-para-imprimir tr,
+  #remito-para-imprimir td,
+  #remito-para-imprimir th {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* Tabla compacta en impresión */
-  #remito-para-imprimir .tabla-items td,
-  #remito-para-imprimir .tabla-items th {
-    padding: 4px 6px !important;
-    font-size: 12px !important;
-    line-height: 1.1 !important;
+  #remito-para-imprimir .rv-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
   }
 
-  /* Anular min-heights en impresión */
-  #remito-para-imprimir * {
-    min-height: auto !important;
+  #remito-para-imprimir .rv-table th,
+  #remito-para-imprimir .rv-table td {
+    border: 0.3mm solid #dddddd !important;
+    padding: 2mm 2.2mm !important;
+    font-size: 3.05mm !important;
+    line-height: 1.2 !important;
   }
 }
