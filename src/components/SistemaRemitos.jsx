@@ -32,7 +32,6 @@ const SistemaRemitos = () => {
     condicionFiscal: '',
     observaciones: ''
   });
-  const [nombreClienteInput, setNombreClienteInput] = useState('');
 
   const [productos, setProductos] = useState([]);
   const [nuevoProducto, setNuevoProducto] = useState({
@@ -550,13 +549,11 @@ const SistemaRemitos = () => {
       condicionFiscal: clienteSeleccionado.condicionFiscal || '',
       observaciones: clienteSeleccionado.observaciones || '',
     });
-    setNombreClienteInput(`${clienteSeleccionado.nombre || ''} ${clienteSeleccionado.apellido || ''}`.trim());
     setError('');
   };
 
   const verRemitoHistorial = (remito) => {
     setCliente(remito.cliente);
-    setNombreClienteInput(`${remito.cliente.nombre || ''} ${remito.cliente.apellido || ''}`.trim());
     setProductos(remito.productos);
     setNumeroRemito(remito.numero);
     setFechaRemito(remito.fecha || new Date().toISOString());
@@ -567,7 +564,6 @@ const SistemaRemitos = () => {
   const nuevoRemito = () => {
     setMostrarRemito(false);
     setCliente({ nombre: '', apellido: '', direccion: '', email: '', telefono: '', cuit: '', condicionFiscal: '', observaciones: '' });
-    setNombreClienteInput('');
     setFechaRemito(new Date().toISOString());
     setProductos([]);
     setError('');
@@ -771,7 +767,7 @@ const SistemaRemitos = () => {
     { key: 'config', icon: <Settings size={18} />, label: 'Configuración' },
   ];
 
-  const nombreClienteCompleto = nombreClienteInput || `${cliente.nombre} ${cliente.apellido}`.trim();
+  const nombreClienteCompleto = [cliente.apellido, cliente.nombre].filter(Boolean).join(', ');
   const formatoMoneda = new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -799,6 +795,13 @@ const SistemaRemitos = () => {
     const direccion = (clienteData.direccion || '').trim().toLowerCase();
     const telefono = (clienteData.telefono || '').trim();
     return `${etiqueta}__${direccion}__${telefono}`;
+  };
+
+  const getClienteSortKey = (clienteData = {}) => {
+    const apellido = (clienteData.apellido || '').trim().toLowerCase();
+    const nombre = (clienteData.nombre || '').trim().toLowerCase();
+    const razonSocial = (clienteData.razonSocial || '').trim().toLowerCase();
+    return `${apellido} ${nombre}`.trim() || razonSocial;
   };
 
   if (cargando) {
@@ -1026,7 +1029,11 @@ const SistemaRemitos = () => {
     if (filtroHistorial === 'recientes') {
       grupos.sort((a, b) => b.maxFecha - a.maxFecha);
     } else {
-      grupos.sort((a, b) => a.displayName.localeCompare(b.displayName, 'es', { sensitivity: 'base', ignorePunctuation: true }));
+      grupos.sort((a, b) => {
+        const sortA = getClienteSortKey(a.cliente) || a.displayName.toLowerCase();
+        const sortB = getClienteSortKey(b.cliente) || b.displayName.toLowerCase();
+        return sortA.localeCompare(sortB, 'es', { sensitivity: 'base', ignorePunctuation: true });
+      });
     }
 
     const gruposMostrados = filtroHistorial === 'deuda'
@@ -1513,11 +1520,7 @@ const SistemaRemitos = () => {
                   >
                     <option value="">Seleccionar cliente...</option>
                     {[...clientesGuardados]
-                      .sort((a, b) => {
-                        const nombreA = `${a.apellido || ''} ${a.nombre || ''}`.trim().toLowerCase();
-                        const nombreB = `${b.apellido || ''} ${b.nombre || ''}`.trim().toLowerCase();
-                        return nombreA.localeCompare(nombreB, 'es', { sensitivity: 'base' });
-                      })
+                      .sort((a, b) => getClienteSortKey(a).localeCompare(getClienteSortKey(b), 'es', { sensitivity: 'base' }))
                       .map((c, index) => (
                         <option key={index} value={JSON.stringify(c)}>
                           {c.apellido}, {c.nombre} - {c.direccion}
@@ -1528,20 +1531,23 @@ const SistemaRemitos = () => {
               )}
 
               <div className="rm-form-grid">
-                <div className="span-2">
-                  <label>Nombre y Apellido / Razón Social *</label>
+                <div>
+                  <label>Nombre *</label>
                   <input
                     type="text"
-                    value={nombreClienteInput}
-                    onChange={(e) => {
-                      const nombreCompleto = e.target.value;
-                      setNombreClienteInput(nombreCompleto);
-                      const partes = nombreCompleto.trim().split(/\s+/).filter(Boolean);
-                      const nombre = partes.shift() || '';
-                      const apellido = partes.join(' ');
-                      setCliente({ ...cliente, nombre, apellido });
-                    }}
-                    placeholder="Ingrese nombre o razón social"
+                    value={cliente.nombre}
+                    onChange={(e) => setCliente({ ...cliente, nombre: e.target.value })}
+                    placeholder="Ingrese nombre"
+                  />
+                </div>
+
+                <div>
+                  <label>Apellido *</label>
+                  <input
+                    type="text"
+                    value={cliente.apellido}
+                    onChange={(e) => setCliente({ ...cliente, apellido: e.target.value })}
+                    placeholder="Ingrese apellido"
                   />
                 </div>
 
